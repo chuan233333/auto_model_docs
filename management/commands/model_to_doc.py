@@ -26,7 +26,6 @@ from openpyxl.styles import (
     Font,
 )
 
-
 # 设置单元格样式
 border = Border(
     left=Side(border_style="thin", color="000000"),
@@ -36,8 +35,8 @@ border = Border(
 )
 fill_index = PatternFill("solid", fgColor="FFD700")
 fill_table = PatternFill("solid", fgColor="228B22")
-font_index = Font(name="メイリオ", size=12, bold=True)
-font_table = Font(name="メイリオ", size=13, bold=True)
+font_index = Font(name="微软雅黑", size=12, bold=True)
+font_table = Font(name="微软雅黑", size=13, bold=True, italic=True)
 
 
 def magic_doc(need_apps):
@@ -52,7 +51,7 @@ def magic_doc(need_apps):
     else:
         model_dict = {x: list(models.get(x).values()) for x in models}
     files_text = list()
-    project_name = "UR"
+    project_name = "Repair"
     files_text.append("# %s数据库设计" % (project_name,))
     files_text.append("- 文档时间： %s" % (time.strftime("%Y-%m-%d"),))
 
@@ -71,7 +70,7 @@ def magic_doc(need_apps):
         # 遍历所有字段
         for target_cls in models:
             # 获取verbose_name
-            model_key = "%s" % (target_cls._meta.verbose_name,)
+            model_key = "%s" % (target_cls._meta.db_table,)
             fields = dict()
             for field in target_cls._meta.fields:
                 # 外键字段名加_id
@@ -86,9 +85,10 @@ def magic_doc(need_apps):
 
             files_text.append("#### %s" % (model_key,))
             files_text.append("- 表名： %s" % (target_cls._meta.db_table,))
+            files_text.append("- 中文名： %s" % (target_cls._meta.verbose_name,))
             files_text.append("\n")
-            files_text.append("|字段|中文|数据类型|空|默认值|字段类型|备注|")
-            files_text.append("|-|-|-|:-:|:-:|:-:|-|")
+            files_text.append("|字段|中文|字段类型|空|默认值|主/外键|枚举值|字符最大长度|备注|")
+            files_text.append("|-|-|-|:-:|:-:|:-:|-|-|-|")
             for (k, v) in fields.items():
                 is_main_key = is_for_key = False
                 # 获取字段默认值
@@ -117,8 +117,10 @@ def magic_doc(need_apps):
                     "default",
                     "primary_key",
                     "choices",
+                    "max_length",
+                    "help_text"
                 ]:
-                    args.append(str(v[tag]))
+                    args.append("") if tag == "max_length" and v[tag] == None else args.append(str(v[tag]))
                 data = "|%s|" % "|".join(args)
                 files_text.append(data)
             files_text.append("\n\n")
@@ -168,17 +170,18 @@ def to_excel(need_apps):
         ws = wb.create_sheet(app, index=0)
         for target_cls in models:
             table = target_cls._meta.db_table
-            ws.append([table])
-            ws.cell(ws.max_row, 1).alignment = Alignment(horizontal="center")
-            ws.cell(ws.max_row, 1).fill = fill_table
-            ws.cell(ws.max_row, 1).font = font_table
-            ws.append(["字段", "中文", "数据类型", "空", "默认值", "字段类型", "备注"])
+            table_verbose_name = target_cls._meta.verbose_name
+            ws.append([table, str(table_verbose_name)])
+            for column in [1, 2]:
+                ws.cell(ws.max_row, column).alignment = Alignment(horizontal="center")
+                ws.cell(ws.max_row, column).fill = fill_table
+                ws.cell(ws.max_row, column).font = font_table
+            ws.append(["字段", "中文", "字段类型", "空", "默认值", "主/外键", "枚举值", "字符最大长度", "备注"])
             for c in ws[ws.max_row]:
                 c.alignment = Alignment(horizontal="center")
                 c.fill = fill_index
                 c.font = font_index
             fields = dict()
-            columns = list()
             for field in target_cls._meta.fields:
                 if type(field).__name__ == "ForeignKey":
                     f_name = field.name + "_id"
@@ -188,6 +191,7 @@ def to_excel(need_apps):
                     fields[f_name] = dict()
                 fields[f_name].update(field.__dict__)
                 fields[f_name]["field_type"] = str(type(field).__name__)
+                print(field.db_type())
             for (k, v) in fields.items():
                 is_main_key = is_for_key = False
                 if "NOT_PROVIDED" in str(v["default"]):
@@ -213,8 +217,10 @@ def to_excel(need_apps):
                     "default",
                     "primary_key",
                     "choices",
+                    "max_length",
+                    "help_text"
                 ]:
-                    args.append(str(v[tag]))
+                    args.append("") if tag == "max_length" and v[tag] == None else args.append(str(v[tag]))
                 ws.append(args)
             ws.append(["\n"])
             ws.append(["\n"])
@@ -250,7 +256,7 @@ class Command(BaseCommand):
             if choice == "1" or choice == "md":
                 txt = magic_doc(need_apps)
                 with open(
-                    "./docs/magic_model_markdown.md", "w", encoding="utf-8"
+                        "./docs/magic_model_markdown.md", "w", encoding="utf-8"
                 ) as fw:
                     fw.write("\n".join(txt))
                 self.stdout.write(self.style.SUCCESS("转换成功"))
@@ -260,4 +266,4 @@ class Command(BaseCommand):
             else:
                 self.stderr.write(self.style.ERROR("不支持的格式"))
         except Exception as e:
-            self.stderr.write(self.style.ERROR(e))
+            print(e)
