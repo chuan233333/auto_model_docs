@@ -191,7 +191,6 @@ def to_excel(need_apps):
                     fields[f_name] = dict()
                 fields[f_name].update(field.__dict__)
                 fields[f_name]["field_type"] = str(type(field).__name__)
-                print(field.db_type())
             for (k, v) in fields.items():
                 is_main_key = is_for_key = False
                 if "NOT_PROVIDED" in str(v["default"]):
